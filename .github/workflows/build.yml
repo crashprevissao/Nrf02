@@ -25,19 +25,16 @@ jobs:
         
     - name: Install Libraries
       run: |
-        # Biblioteca para CC1101 (via GitHub)
         mkdir -p ~/Arduino/libraries
         git clone https://github.com/LSatan/SmartRC-CC1101-Driver-Lib.git ~/Arduino/libraries/SmartRC-CC1101
-        
-        # Biblioteca para Display OLED
         arduino-cli lib install "U8g2"
-        
-        # Biblioteca para LEDs NeoPixel
         arduino-cli lib install "Adafruit NeoPixel"
+        
+    - name: Fix filename case
+      run: mv ./nRFBox/Icone.h ./nRFBox/icon.h 2>/dev/null || true
         
     - name: Compile
       run: |
-        # Compila o sketch especificando a pasta nRFBox
         arduino-cli compile --fqbn esp32:esp32:esp32 ./nRFBox/nRFBox.ino --output-dir ./build
         
     - name: Upload Artifact
