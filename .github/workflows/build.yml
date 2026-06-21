@@ -23,16 +23,17 @@ jobs:
         arduino-cli core update-index --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
         arduino-cli core install esp32:esp32 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
         
-    - name: Install CC1101 Library
-      run: arduino-cli lib install "SmartRC-CC1101"
-      
+    - name: Install CC1101 Library from GitHub
+      run: |
+        # Cria pasta de bibliotecas se não existir
+        mkdir -p ~/Arduino/libraries
+        # Clona a biblioteca SmartRC-CC1101 diretamente do GitHub
+        git clone https://github.com/LSatan/SmartRC-CC1101-Driver-Lib.git ~/Arduino/libraries/SmartRC-CC1101
+        
     - name: Find and Compile
       run: |
-        # Encontra o arquivo .ino automaticamente
         SKETCH=$(find . -name "*.ino" -type f | head -1)
         echo "Found sketch: $SKETCH"
-        
-        # Compila com todas as bibliotecas locais do projeto
         arduino-cli compile --fqbn esp32:esp32:esp32 "$SKETCH" --output-dir ./build
         
     - name: Upload Artifact
