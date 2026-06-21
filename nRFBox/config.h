@@ -28,6 +28,23 @@
 #define NRF_CE_PIN_C    15  
 #define NRF_CSN_PIN_C   2  
 
+// CC1101-specific Pins (NOVO)
+#define CC1101_CS_PIN    13  // D13
+#define CC1101_MOSI_PIN  12  // D12  
+#define CC1101_MISO_PIN  35  // D35 (input only - ok para MISO)
+#define CC1101_SCK_PIN   34  // D34 (usado como SCK - cuidado, é input only, melhor usar outro)
+// Alternativa usando GPIO disponíveis:
+#define CC1101_CS        13  // D13
+#define CC1101_MOSI      12  // D12
+#define CC1101_MISO      35  // D35
+#define CC1101_SCK       34  // D34 - PROBLEMA: input only!
+
+// Configuração recomendada (ajustar conforme seus pinos disponíveis):
+// CS: D13 (GPIO13), MOSI: D12 (GPIO12), MISO: D35 (GPIO35), SCK: D4 (GPIO4)
+// GDO0: RX2 (GPIO16), GDO2: TX2 (GPIO17)
+#define CC1101_GDO0      16  // RX2
+#define CC1101_GDO2      17  // TX2
+
 // Common dependencies
 #include "setting.h"
 #include <Arduino.h>
@@ -54,6 +71,9 @@ Adafruit_NeoPixel pixels(1, 14, NEO_GRB + NEO_KHZ800);
 // nRF24-specific dependencies
 #include <nRF24L01.h>
 #include <RF24.h>
+
+// CC1101-specific dependencies (NOVO)
+#include <ELECHOUSE_CC1101_SRC_DRV.h>
 
 // WiFi-specific dependencies
 #include <WiFi.h>
@@ -123,6 +143,12 @@ namespace WifiScan {
 namespace Deauther {
   void deautherSetup();
   void deautherLoop();
+}
+
+// CC1101-related namespace (NOVO)
+namespace CC1101 {
+  void cc1101Setup();
+  void cc1101Loop();
 }
 
 #endif // CONFIG_H
