@@ -35,11 +35,10 @@ jobs:
         # Biblioteca para LEDs NeoPixel
         arduino-cli lib install "Adafruit NeoPixel"
         
-    - name: Find and Compile
+    - name: Compile
       run: |
-        SKETCH=$(find . -name "*.ino" -type f | head -1)
-        echo "Found sketch: $SKETCH"
-        arduino-cli compile --fqbn esp32:esp32:esp32 "$SKETCH" --output-dir ./build
+        # Compila o sketch especificando a pasta nRFBox
+        arduino-cli compile --fqbn esp32:esp32:esp32 ./nRFBox/nRFBox.ino --output-dir ./build
         
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
