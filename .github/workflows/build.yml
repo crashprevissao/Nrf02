@@ -23,12 +23,17 @@ jobs:
         arduino-cli core update-index --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
         arduino-cli core install esp32:esp32 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
         
-    - name: Install CC1101 Library from GitHub
+    - name: Install Libraries
       run: |
-        # Cria pasta de bibliotecas se não existir
+        # Biblioteca para CC1101 (via GitHub)
         mkdir -p ~/Arduino/libraries
-        # Clona a biblioteca SmartRC-CC1101 diretamente do GitHub
         git clone https://github.com/LSatan/SmartRC-CC1101-Driver-Lib.git ~/Arduino/libraries/SmartRC-CC1101
+        
+        # Biblioteca para Display OLED
+        arduino-cli lib install "U8g2"
+        
+        # Biblioteca para LEDs NeoPixel
+        arduino-cli lib install "Adafruit NeoPixel"
         
     - name: Find and Compile
       run: |
