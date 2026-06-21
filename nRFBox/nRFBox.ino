@@ -3,202 +3,167 @@
    https://github.com/cifertech/nrfbox
    ________________________________________ */
 
+      #include <U8g2lib.h>
+#include <Wire.h>
+#include <EEPROM.h>
+#include <Adafruit_NeoPixel.h>
 #include "icon.h"
 #include "setting.h"
-#include "config.h"
+#include "cc1101.h"  // NOVO: Biblioteca CC1101
 
-extern uint8_t oledBrightness;
+#ifdef U8X8_HAVE_HW_SPI
+#include <SPI.h>
+#endif
+#ifdef U8X8_HAVE_HW_I2C
+#include <Wire.h>
+#endif
 
-const int NUM_ITEMS = 12;
-const int MAX_ITEM_LENGTH = 20;
+#define NUM_BUTTONS 5
+#define MAX_ITEM_LENGTH 25
 
+const int BUTTON_PINS[NUM_BUTTONS] = {D6, D3, D7, D1, D0}; // UP, DOWN, LEFT, RIGHT, SELECT
+
+// Alterado de 12 para 13 itens
+const int NUM_ITEMS = 13;
+
+// Adicionado bitmap_icon_radio no final
 const unsigned char* bitmap_icons[NUM_ITEMS] = {
   bitmap_icon_scanner, bitmap_icon_analyzer, bitmap_icon_jammer, bitmap_icon_kill,
   bitmap_icon_ble_jammer, bitmap_icon_spoofer, bitmap_icon_apple, bitmap_icon_ble,
   bitmap_icon_wifi, bitmap_icon_wifi_jammer, bitmap_icon_about, 
-  bitmap_icon_setting
+  bitmap_icon_setting,
+  bitmap_icon_radio  // NOVO: Ícone do CC1101/Sub-GHz
 };
 
+// Adicionado "Sub-GHz" no final
 char menu_items[NUM_ITEMS][MAX_ITEM_LENGTH] = {  
   "Scanner", "Analyzer", "WLAN Jammer", "Proto Kill", "BLE Jammer",
   "BLE Spoofer", "Sour Apple", "BLE Scan", "WiFi Scan", 
-  "Deauther", "About", "Setting"
+  "Deauther", "About", "Setting",
+  "Sub-GHz"  // NOVO: Nome do menu CC1101
 };
 
+// Adicionadas funções do CC1101 no final
 void (*menu_functions[NUM_ITEMS])() = {
   Scanner::scannerSetup, Analyzer::analyzerSetup, Jammer::jammerSetup,
   ProtoKill::blackoutSetup, BleJammer::blejammerSetup, Spoofer::spooferSetup,
-  SourApple::sourappleSetup, BleScan::blescanSetup, WifiScan::wifiscanSetup, Deauther::deautherSetup,
-  utils, Setting::settingSetup
+  SourApple::sourappleSetup, BleScan::blescanSetup, WifiScan::wifiscanSetup, 
+  Deauther::deautherSetup, utils, Setting::settingSetup,
+  CC1101::cc1101Setup  // NOVO: Função setup do CC1101
 };
 
 void (*menu_loop_functions[NUM_ITEMS])() = {
   Scanner::scannerLoop, Analyzer::analyzerLoop, Jammer::jammerLoop,
   ProtoKill::blackoutLoop, BleJammer::blejammerLoop, Spoofer::spooferLoop,
-  SourApple::sourappleLoop, BleScan::blescanLoop, WifiScan::wifiscanLoop, Deauther::deautherLoop,
-  nullptr, Setting::settingLoop
+  SourApple::sourappleLoop, BleScan::blescanLoop, WifiScan::wifiscanLoop, 
+  Deauther::deautherLoop, nullptr, Setting::settingLoop,
+  CC1101::cc1101Loop  // NOVO: Função loop do CC1101
 };
 
-int item_selected = 0;
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(1, D8, NEO_GRB + NEO_KHZ800);
+
+int current_selection = 0;
+int item_selected = -1;
 int current_screen = 0;
-unsigned long last_button_time = 0;
-const unsigned long DEBOUNCE_DELAY = 150; 
-const unsigned long POST_PRESS_DELAY = 200; 
-                
-void drawMenu() {
-  u8g2.clearBuffer();
-  if (current_screen != 0) return;
+int previous_screen = 0;
+int next_screen = 0;
 
-  u8g2.setFont(u8g2_font_5x7_tf); 
-  u8g2.drawBox(0, 0, 128, 8); 
-  u8g2.setDrawColor(0); 
-  char versionStr[16];
-  for (size_t i = 0; i < sizeof(txt_v); i++) {
-    versionStr[i] = (char)txt_v[i];
-  }
-  versionStr[sizeof(txt_v)] = '\0';
+int previous_button_state[NUM_BUTTONS];
+int current_button_state[NUM_BUTTONS];
 
-  u8g2.setDrawColor(0);
+void setup(void) {
+  pixels.begin();
+  pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+  pixels.show();
 
-  Str(2, 7, txt_n, sizeof(txt_n));
-  int version_width = u8g2.getUTF8Width(versionStr);
-  Str(128 - version_width - 2, 7, txt_v, sizeof(txt_v));
-  u8g2.setDrawColor(1); 
-  u8g2.drawHLine(0, 8, 128); 
-
-  const int icons_per_row = 3;
-  const int icons_per_col = 2;
-  const int max_display_items = icons_per_row * icons_per_col; 
-
-  int selected_col = item_selected % icons_per_row;
-  int selected_row = (item_selected / icons_per_row) % icons_per_col;
-  if (item_selected == 12) {
-    selected_row = 1; 
-  }
-  int highlight_x = 13 + selected_col * 40;
-  int highlight_y = 14 + selected_row * 24;
-
-  int start_row = (item_selected / icons_per_row) - selected_row;
-  if (start_row < 0) start_row = 0;
-  int total_rows = (NUM_ITEMS + icons_per_row - 1) / icons_per_row;
-  if (start_row > total_rows - icons_per_col) start_row = total_rows - icons_per_col;
-  if (start_row < 0) start_row = 0; 
-  int start_item = start_row * icons_per_row;
-  int end_item = min(NUM_ITEMS, start_item + max_display_items);
-
-  for (int i = start_item; i < end_item; i++) {
-    int idx = i - start_item; 
-    int row = idx / icons_per_row;
-    int col = idx % icons_per_row;
-    int x_pos = 13 + col * 40;
-    int y_pos = 14 + row * 24;
-    u8g2.drawXBMP(x_pos, y_pos, 16, 16, bitmap_icons[i]);
-  }
-
-  u8g2.drawRFrame(highlight_x - 3, highlight_y - 3, 22, 22, 3); 
-  u8g2.setDrawColor(0);
-  u8g2.drawRFrame(highlight_x - 2, highlight_y - 2, 22, 22, 3); 
-  u8g2.setDrawColor(1);
-
-  u8g2.setFont(u8g2_font_5x8_tf); 
-  int name_width = u8g2.getUTF8Width(menu_items[item_selected]);
-  int name_x = (128 - name_width) / 2;
-  u8g2.drawStr(name_x, 64, menu_items[item_selected]); 
-
-  u8g2.drawFrame(124, 18, 4, 38); 
-  int bar_height = 38 / total_rows;
-  u8g2.drawBox(124, 18 + (bar_height * start_row), 4, bar_height); 
-
-  if (start_row > 0) {
-    u8g2.drawStr(124, 15, "."); 
-  }
-  if (start_row < total_rows - 1) {
-    u8g2.drawStr(124, 64, "."); 
-  }
-  u8g2.sendBuffer();
-
-  setRadiosNeutralState();
-}
-
-bool readButton(int pin) {
-  if (digitalRead(pin) == LOW && (millis() - last_button_time > DEBOUNCE_DELAY)) {
-    last_button_time = millis();
-    delay(POST_PRESS_DELAY); 
-    return true;
-  }
-  return false;
-}
-
-void setup() {
-  Serial.begin(115200);
-  neopixelSetup();
-  initAllRadios();
-  EEPROM.begin(512);
-  oledBrightness = EEPROM.read(1);
   u8g2.begin();
-  u8g2.setContrast(oledBrightness);
-  conf();
-  pinMode(BUTTON_UP_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_SELECT_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_DOWN_PIN, INPUT_PULLUP);
-  pinMode(BTN_PIN_RIGHT, INPUT_PULLUP);
-  pinMode(BTN_PIN_LEFT, INPUT_PULLUP);
-  drawMenu();
+  u8g2.setBitmapMode(1);
+  
+  for (int i = 0; i < NUM_BUTTONS; i++) {
+    pinMode(BUTTON_PINS[i], INPUT_PULLUP);
+    previous_button_state[i] = HIGH;
+  }
+
+  if (EEPROM.read(0) == 255) {
+    EEPROM.write(0, 0);
+    EEPROM.commit();
+  }
 }
 
-void loop() {
-  if (current_screen == 0) {
-    const int icons_per_row = 3;
+void loop(void) {
+  u8g2.clearBuffer();
+  drawMenu();
+  u8g2.sendBuffer();
+  
+  checkButtonState();
+}
 
-    if (readButton(BTN_PIN_LEFT)) {
-      item_selected = max(0, item_selected - 1);
-      drawMenu();
-    }
-    if (readButton(BTN_PIN_RIGHT)) {
-      item_selected = min(NUM_ITEMS - 1, item_selected + 1);
-      drawMenu();
-    }
-    if (readButton(BUTTON_UP_PIN)) {
-      item_selected = max(0, item_selected - icons_per_row);
-      drawMenu();
-    }
-    if (readButton(BUTTON_DOWN_PIN)) {
-      item_selected = min(NUM_ITEMS - 1, item_selected + icons_per_row);
-      drawMenu();
-    }
-    if (readButton(BUTTON_SELECT_PIN)) {
-      current_screen = 1;
-      for (int cycle = 0; cycle < 2; cycle++) { 
-        for (int i = 0; i < 3; i++) {
-          u8g2.clearBuffer();
-          u8g2.setFont(u8g2_font_6x10_tr);
-          u8g2.drawStr(30, 32, "Loading");
-    
-          String dots = "";
-          for (int j = 0; j <= i; j++) {
-            dots += ".";
-            setNeoPixelColour("white");
-          }
-          setNeoPixelColour("0");
-          
-          u8g2.drawStr(73, 32, dots.c_str()); 
-    
-          u8g2.sendBuffer();
-          delay(200); 
-        }
-      }
-      menu_functions[item_selected]();
-      
-      while (current_screen == 1) {
-        if (menu_loop_functions[item_selected]) {
-          menu_loop_functions[item_selected]();
-        }
-        if (readButton(BUTTON_SELECT_PIN)) {
-          current_screen = 0;
-          break;
-        }
-      }
-      drawMenu();
-    }
+void drawMenu(void) {
+  int offset = 0;
+  if (current_selection >= 6) {
+    offset = current_selection / 6 * 6;
   }
+  
+  int num_items_to_display = min(6, NUM_ITEMS - offset);
+  
+  for (int i = 0; i < num_items_to_display; i++) {
+    int item_index = i + offset;
+    int x = (i % 3) * 43;
+    int y = (i / 3) * 32;
+    
+    if (item_index == current_selection) {
+      u8g2.setDrawColor(2);
+      u8g2.drawBox(x, y, 42, 32);
+      u8g2.setDrawColor(1);
+    }
+    
+    u8g2.drawXBMP(x + 5, y + 2, 32, 32, bitmap_icons[item_index]);
+    
+    int textWidth = u8g2.getStrWidth(menu_items[item_index]);
+    int textX = x + (42 - textWidth) / 2;
+    
+    u8g2.setFont(u8g2_font_5x7_tf);
+    u8g2.drawStr(textX, y + 30, menu_items[item_index]);
+  }
+}
+
+void checkButtonState(void) {
+  for (int i = 0; i < NUM_BUTTONS; i++) {
+    current_button_state[i] = digitalRead(BUTTON_PINS[i]);
+    
+    if (current_button_state[i] == LOW && previous_button_state[i] == HIGH) {
+      if (i == 0) { // UP
+        if (current_selection > 0) {
+          current_selection--;
+        }
+      } else if (i == 1) { // DOWN
+        if (current_selection < NUM_ITEMS - 1) {
+          current_selection++;
+        }
+      } else if (i == 2) { // LEFT
+        if (current_selection > 0) {
+          current_selection--;
+        }
+      } else if (i == 3) { // RIGHT
+        if (current_selection < NUM_ITEMS - 1) {
+          current_selection++;
+        }
+      } else if (i == 4) { // SELECT
+        item_selected = current_selection;
+        current_screen = item_selected + 1;
+        previous_screen = 0;
+        
+        if (menu_functions[item_selected] != nullptr) {
+          menu_functions[item_selected]();
+        }
+      }
+    }
+    previous_button_state[i] = current_button_state[i];
+  }
+}
+
+void utils(void) {
+  // Função vazia para o item "About"
 }
