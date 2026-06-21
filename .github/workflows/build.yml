@@ -32,10 +32,24 @@ jobs:
         # Bibliotecas do Library Manager
         arduino-cli lib install "U8g2"
         arduino-cli lib install "Adafruit NeoPixel"
-        arduino-cli lib install "RF24"  # <-- Adicionado para nRF24
+        arduino-cli lib install "RF24"
         
-    - name: Fix filename case
-      run: mv ./nRFBox/Icone.h ./nRFBox/icon.h 2>/dev/null || true
+    - name: Fix ALL filename case issues
+      run: |
+        cd ./nRFBox
+        
+        # Corrige Icone.h → icon.h
+        [ -f "Icone.h" ] && mv Icone.h icon.h
+        
+        # Corrige CC1101.h → cc1101.h
+        [ -f "CC1101.h" ] && mv CC1101.h cc1101.h
+        
+        # Corrige CC1101.cpp → cc1101.cpp (se existir)
+        [ -f "CC1101.cpp" ] && mv CC1101.cpp cc1101.cpp
+        
+        # Lista arquivos para debug
+        echo "Arquivos na pasta:"
+        ls -la
         
     - name: Compile
       run: |
