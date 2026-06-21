@@ -25,10 +25,14 @@ jobs:
         
     - name: Install Libraries
       run: |
+        # Biblioteca para CC1101 (via GitHub)
         mkdir -p ~/Arduino/libraries
         git clone https://github.com/LSatan/SmartRC-CC1101-Driver-Lib.git ~/Arduino/libraries/SmartRC-CC1101
+        
+        # Bibliotecas do Library Manager
         arduino-cli lib install "U8g2"
         arduino-cli lib install "Adafruit NeoPixel"
+        arduino-cli lib install "RF24"  # <-- Adicionado para nRF24
         
     - name: Fix filename case
       run: mv ./nRFBox/Icone.h ./nRFBox/icon.h 2>/dev/null || true
